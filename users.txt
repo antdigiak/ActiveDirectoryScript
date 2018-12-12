@@ -1,0 +1,85 @@
+
+
+# RESTITUISCO GLI ERRORI 
+Set-StrictMode -Version latest
+
+#----------------------------------------------------------
+# CARICO I MODULI CHE SERVONO
+#----------------------------------------------------------
+Try
+{
+  Import-Module ActiveDirectory -ErrorAction Stop
+}
+Catch
+{
+  Write-Host "[ERROR]`t ActiveDirectory Module couldn't be loaded. Script will stop!"
+  Exit 1
+}
+
+#----------------------------------------------------------
+# DICHIARO LE VARIABILI PRINCIPALI
+#----------------------------------------------------------
+$path     = Split-Path -parent $MyInvocation.MyCommand.Definition
+$newpath  = $path + "\ImportaListaNuoveUtenze.csv"
+$log      = $path + "\CreaNuoveUtenze.log"
+$date     = Get-Date
+$addn     = (Get-ADDomain).DistinguishedName
+$dnsroot  = (Get-ADDomain).DNSRoot
+$i        = 1
+
+#----------------------------------------------------------
+# FUNCTIONS START
+#----------------------------------------------------------
+Function Start-Commands
+{
+  Create-Users
+}
+
+Function Create-Users
+{
+  "Processo iniziato (on " + $date + "): " | Out-File $log -append
+  "--------------------------------------------" | Out-File $log -append
+  Import-CSV $newpath | ForEach-Object {
+    If (($_.Implement.ToLower()) -eq "yes")
+    {
+      If (($_.GivenName -eq "") -Or ($_.LastName -eq "") -Or ($_.Initials -eq ""))
+      {
+        Write-Host "[ERROR]`t Please provide valid GivenName, LastName and Initials. Processing skipped for line $($i)`r`n"
+        "[ERROR]`t Please provide valid GivenName, LastName and Initials. Processing skipped for line $($i)`r`n" | Out-File $log -append
+      }
+      Else
+      {
+        # Imposto la OU da utilizzare per la creazione
+        $location = $_.TargetOU + ",$($addn)"
+
+        # Set the Enabled and PasswordNeverExpires properties
+        If (($_.Enabled.ToLower()) -eq "true") { $enabled = $True } Else { $enabled = $False }
+        If (($_.PasswordNeverExpires.ToLower()) -eq "true") { $expires = $True } Else { $expires = $False }
+
+        # Controllo la nazione 
+        # In questo caso uso l'Italia 
+        # come esempio
+        If($_.Country -eq "Italia")
+        {
+          $_.Country = "IT"
+        }
+        Else
+        {
+          $_.Country = "EN"
+        }
+        # Correggo il problema che si potrebbe creare
+        # quando il nome termina con un punto
+        $replace = $_.Lastname.Replace(".","") # 
+        If($replace.length -lt 10) # Imposto la lunghezza del cognome a max. 10 caratteri
+        {
+          $lastname = $replace
+        }
+        Else
+        {
+          $lastname = $replace.substring(0,6)
+        }
+        # Creo il nome secondo la seguente 'naming convention' scelta arbitrariamente:
+        # <PrimaLetteraDelNome><PrimeQuattroLettereDelCongnome> Per esempio
+        # ADIGI
+        
+# PER LEGGERE IL RESTO DELLO SCRIPT, O PER UNA CONSULENZA PERSONALIZZATA CONTATTAMI SU: http://digiacomo.info
